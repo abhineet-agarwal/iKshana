@@ -1,0 +1,87 @@
+import osmium
+import math
+import json
+
+# Sample OSM data in PBF format (replace 'data.osm.pbf' with your actual data file)
+osm_data_file = 'map.osm'
+
+class IntersectionHandler(osmium.SimpleHandler):
+    def __init__(self):
+        super(IntersectionHandler, self).__init__()
+        self.intersections = {}  # Dictionary to store information for each intersection
+        self.valid_nodes = {}   # Dictionary to store latitude and longitude of nodes with valid locations
+
+    def add_intersection(self, node_id, latitude, longitude):
+        if node_id not in self.intersections:
+            self.intersections[node_id] = {
+                'latitude': latitude,
+                'longitude': longitude,
+                'num_roads': 0,
+                'bearings': set()
+            }
+
+    def calculate_bearing(self, lat1, lon1, lat2, lon2):
+        lat1, lon1 = math.radians(lat1), math.radians(lon1)
+        lat2, lon2 = math.radians(lat2), math.radians(lon2)
+
+        delta_lon = lon2 - lon1
+
+        y = math.sin(delta_lon) * math.cos(lat2)
+        x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(delta_lon)
+        initial_bearing = math.atan2(y, x)
+        initial_bearing = math.degrees(initial_bearing)
+        compass_bearing = (initial_bearing + 360) % 360
+
+        return compass_bearing
+
+    def node(self, n):
+        if n.location.valid:
+            self.valid_nodes[n.id] = {
+                'latitude': n.location.lat,
+                'longitude': n.location.lon
+            }
+
+
+    def way(self, w):
+        if len(w.nodes) >= 2:
+            node1, node2 = w.nodes[0], w.nodes[-1]
+            node_id1, node_id2 = node1.ref, node2.ref
+
+            if node_id1 in self.valid_nodes and node_id2 in self.valid_nodes:
+                self.add_intersection(node_id1, self.valid_nodes[node_id1]['latitude'], self.valid_nodes[node_id1]['longitude'])
+                self.intersections[node_id1]['num_roads'] += 1
+                bearing = self.calculate_bearing(
+                    self.valid_nodes[node_id1]['latitude'], self.valid_nodes[node_id1]['longitude'],
+                    self.valid_nodes[node_id2]['latitude'], self.valid_nodes[node_id2]['longitude']
+                )
+                self.intersections[node_id1]['bearings'].add(bearing)
+
+                if node_id1 != node_id2:
+                    self.add_intersection(node_id2, self.valid_nodes[node_id2]['latitude'], self.valid_nodes[node_id2]['longitude'])
+                    self.intersections[node_id2]['num_roads'] += 1
+                    bearing = self.calculate_bearing(
+                        self.valid_nodes[node_id2]['latitude'], self.valid_nodes[node_id2]['longitude'],
+                        self.valid_nodes[node_id1]['latitude'], self.valid_nodes[node_id1]['longitude']
+                    )
+                    self.intersections[node_id2]['bearings'].add(bearing)
+
+
+# Parse OSM data to find intersections
+handler = IntersectionHandler()
+handler.apply_file(osm_data_file)
+# Convert sets to lists in the intersections dictionary
+for node_id, data in handler.intersections.items():
+    data['bearings'] = list(data['bearings'])
+with open('intersections_data.json', 'w') as json_file:
+    json.dump(handler.intersections, json_file)
+
+# Print the information for all intersections at IIT Bombay
+print("Information for all intersections at IIT Bombay:")
+for node_id, data in handler.intersections.items():
+    print(f"Node ID: {node_id}")
+    print(f"Latitude: {data['latitude']}, Longitude: {data['longitude']}")
+    print(f"Number of roads intersecting: {data['num_roads']}")
+    print("Bearings of roads:")
+    for bearing in data['bearings']:
+        print(f"    {bearing} degrees")
+    print("---------------------------")
