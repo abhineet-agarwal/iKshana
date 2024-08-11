@@ -1,0 +1,15 @@
+[
+    {
+        "filename": "pic1.jpg",
+        "description": "Family at the beach",
+        "year": "2010",
+        "location": "Beach"
+    },
+    {
+        "filename": "pic2.jpg",
+        "description": "Celebrating in the backyard",
+        "year": "2015",
+        "location": "Home"
+    },
+    // Add more photo entries
+]
